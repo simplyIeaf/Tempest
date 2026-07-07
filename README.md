@@ -6,17 +6,11 @@
   </picture>
 </p>
 
-<p align="center">
-  A native Linux launcher for <a href="https://playvortex.io">Vortex</a>, written in Rust.
-</p>
-
 ---
 
+This project is now a public archive. I no longer wish to be associated in any way with the Vortex platform or its owner. If you find this tool useful, I encourage you to fork the repository and continue its development.
+
 Tempest is a community-built command-line tool that handles Wine configuration, authentication, URI scheme registration, and game launching.
-
-**What it is:** A launcher wrapper that bridges the Linux desktop and the Windows Vortex client via Wine.
-
-**What it is not:** An official product. Tempest is not affiliated with, endorsed by, or supported by the Vortex team or playvortex.io. It does not modify, redistribute, or replicate any part of the Vortex client.
 
 ---
 
@@ -28,8 +22,6 @@ tempest setup
 ```
 
 `setup` installs Wine, creates a dedicated Wine prefix, installs DXVK and vkd3d-proton, downloads Vortex, and registers the `vortex://` URI scheme.
-
-New to Linux or hitting driver errors? Paste [docs/setup-agent-prompt.md](docs/setup-agent-prompt.md) into your AI agent and it will detect your distro and GPU, install the right Vulkan drivers, and configure Tempest for you.
 
 ---
 
@@ -49,17 +41,6 @@ tempest uninstall          Remove everything Tempest installed
 ```
 
 After setup, clicking Play on the Vortex website triggers `tempest uri-handler` automatically via the registered `vortex://` scheme.
-
----
-
-## Supported distributions
-
-| Distribution | Package manager |
-|---|---|
-| Fedora, RHEL, CentOS Stream | dnf |
-| Debian, Ubuntu, Mint, Pop!_OS | apt |
-| Arch, Manjaro, EndeavourOS | pacman |
-| openSUSE | zypper |
 
 ---
 
@@ -101,12 +82,6 @@ TEMPEST_LOG=debug tempest play 4
 
 ---
 
-## Contributing
-
-Bug reports and pull requests are welcome. Run `cargo test` before submitting.
-
----
-
 ## Disclaimer
 
 Tempest is an independent, community-developed tool and is not affiliated with, endorsed by, or in any way connected to the developers or operators of Vortex or playvortex.io. All trademarks and service marks are the property of their respective owners. Use of this tool is at your own risk.
@@ -117,8 +92,8 @@ Tempest is an independent, community-developed tool and is not affiliated with, 
 
 Licensed under either of
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT License ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT License ([LICENSE-MIT](LICENSE-MIT))
 
 at your option.
 
