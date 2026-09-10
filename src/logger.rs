@@ -23,36 +23,14 @@ impl LogFile {
 }
 
 fn timestamp() -> String {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default();
-    let secs = now.as_secs();
+    use time::OffsetDateTime;
 
-    let days = secs / 86400;
-    let time = secs % 86400;
-    let hours = time / 3600;
-    let mins = (time % 3600) / 60;
-    let sec = time % 60;
+    const FMT: &[time::format_description::BorrowedFormatItem] =
+        time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
 
-    let y = 1970 + days / 365;
-    let rem = days % 365;
-    let leap = (y - 1969) / 4 - (y - 1901) / 100 + (y - 1601) / 400;
-    let doy = rem.saturating_sub(leap);
-
-    let (mon, day) = ymd_from_doy(doy);
-    format!("{y:04}-{mon:02}-{day:02} {hours:02}:{mins:02}:{sec:02}")
-}
-
-fn ymd_from_doy(doy: u64) -> (u64, u64) {
-    let dim = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    let mut left = doy;
-    for (i, &d) in dim.iter().enumerate() {
-        if left < d {
-            return (i as u64 + 1, left + 1);
-        }
-        left -= d;
-    }
-    (12, 31)
+    OffsetDateTime::now_utc()
+        .format(&FMT)
+        .unwrap_or_else(|_| "????-??-?? ??:??:??".to_string())
 }
 
 pub fn init(path: PathBuf) {

@@ -1,5 +1,4 @@
 use colored::Colorize;
-use std::io::{Cursor, Write};
 use std::path::Path;
 use crate::config::Config;
 use crate::TempestError;
@@ -43,24 +42,28 @@ async fn download_vortex(dest: &Path, session_token: Option<&str>) -> Result<(),
     let pb = crate::setup::progress_bar(total);
 
     use futures_util::StreamExt;
-    let mut zip_bytes: Vec<u8> = Vec::with_capacity(total.unwrap_or(10_000_000) as usize);
+
+    let zip_path = dest.with_extension("zip.tmp");
+    let mut file = std::fs::File::create(&zip_path)?;
     let mut stream = resp.bytes_stream();
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(TempestError::NetworkError)?;
-        zip_bytes.extend_from_slice(&chunk);
+        std::io::Write::write_all(&mut file, &chunk)?;
         pb.inc(chunk.len() as u64);
     }
     pb.finish_with_message("Downloaded");
 
     println!("{} Extracting Vortex.exe from zip...", "[INFO]".cyan());
-    extract_exe_from_zip(&zip_bytes, dest)?;
-
-    Ok(())
+    let result = extract_exe_from_zip(&zip_path, dest);
+    std::fs::remove_file(&zip_path).ok();
+    result
 }
 
-fn extract_exe_from_zip(zip_bytes: &[u8], dest: &Path) -> Result<(), TempestError> {
-    let cursor = Cursor::new(zip_bytes);
-    let mut archive = zip::ZipArchive::new(cursor)
+fn extract_exe_from_zip(zip_path: &Path, dest: &Path) -> Result<(), TempestError> {
+    use std::io::Write;
+
+    let file = std::fs::File::open(zip_path)?;
+    let mut archive = zip::ZipArchive::new(file)
         .map_err(|e| TempestError::IoError(std::io::Error::other(e.to_string())))?;
 
     let exe_index = (0..archive.len()).find(|&i| {
