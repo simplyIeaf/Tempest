@@ -8,16 +8,14 @@
 
 ---
 
-This project is now a public archive. I no longer wish to be associated in any way with the Vortex platform or its owner. If you find this tool useful, I encourage you to fork the repository and continue its development.
-
-Tempest is a community-built command-line tool that handles Wine configuration, authentication, URI scheme registration, and game launching.
+Tempest is a command-line tool that handles Wine/Proton configuration, authentication, URI scheme registration, and game launching for Vortex.
 
 ---
 
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/solomon-gleeson/tempest/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/simplyIeaf/Tempest/master/install.sh | bash
 tempest setup
 ```
 

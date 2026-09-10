@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="solomon-gleeson/tempest"
+REPO="simplyIeaf/Tempest"
 INSTALL_DIR="/usr/local/bin"
 BINARY="tempest"
 
