@@ -2,6 +2,30 @@ use colored::Colorize;
 use std::process::Command;
 use url::Url;
 
+pub fn build_uri(game_id: u32, token: &str) -> String {
+    let mut url = Url::parse("vortex://play").expect("vortex scheme parses");
+    {
+        let mut pairs = url.query_pairs_mut();
+        pairs.append_pair("game", &game_id.to_string());
+        pairs.append_pair("token", token);
+    }
+    url.to_string()
+}
+
+pub fn redact(uri: &str) -> String {
+    match parse_vortex_uri(uri) {
+        Some((game_id, _)) => format!("vortex://play?game={game_id}&token=<redacted>"),
+        None => match uri.find("token=") {
+            Some(idx) => {
+                let mut s = uri[..idx + "token=".len()].to_string();
+                s.push_str("<redacted>");
+                s
+            }
+            None => "<invalid vortex:// uri>".to_string(),
+        },
+    }
+}
+
 pub fn parse_vortex_uri(uri: &str) -> Option<(u32, String)> {
     let parsed = Url::parse(uri).ok()?;
     if parsed.scheme() != "vortex" {
@@ -63,7 +87,7 @@ pub fn register() {
 }
 
 pub async fn handle(uri: &str) {
-    tracing::debug!("Handling URI: {}", uri);
+    tracing::debug!("Handling URI: {}", redact(uri));
     match parse_vortex_uri(uri) {
         Some((game_id, token)) => {
             println!("{} Launching game {} via URI", "[INFO]".cyan(), game_id);
@@ -94,5 +118,21 @@ mod tests {
     #[test]
     fn parse_missing_token() {
         assert!(parse_vortex_uri("vortex://play?game=4").is_none());
+    }
+
+    #[test]
+    fn build_uri_encodes_token() {
+        let uri = build_uri(4, "abc+def/ghi=j&k#");
+        assert_eq!(uri, "vortex://play?game=4&token=abc%2Bdef%2Fghi%3Dj%26k%23");
+        let (id, token) = parse_vortex_uri(&uri).unwrap();
+        assert_eq!(id, 4);
+        assert_eq!(token, "abc+def/ghi=j&k#");
+    }
+
+    #[test]
+    fn redact_masks_token() {
+        let uri = build_uri(7, "secret");
+        assert_eq!(redact(&uri), "vortex://play?game=7&token=<redacted>");
+        assert!(!redact(&uri).contains("secret"));
     }
 }

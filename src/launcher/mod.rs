@@ -6,11 +6,12 @@ use std::process::{Command, Stdio};
 use crate::config::Config;
 
 fn perf_summary(config: &Config, use_gamemode: bool) -> String {
-    let mut active = vec![];
-    if config.launcher.use_fsync { active.push("fsync"); }
-    else if config.launcher.use_esync { active.push("esync"); }
-    if use_gamemode { active.push("gamemode"); }
-    if config.launcher.shader_cache { active.push("shader-cache"); }
+    let mut active: Vec<String> = vec![];
+    if config.launcher.use_esync { active.push("esync".into()); }
+    if config.launcher.use_fsync { active.push("fsync".into()); }
+    if config.launcher.fsr > 0 { active.push(format!("fsr{}", config.launcher.fsr)); }
+    if use_gamemode { active.push("gamemode".into()); }
+    if config.launcher.shader_cache { active.push("shader-cache".into()); }
     if active.is_empty() { "none".to_string() } else { active.join(" ") }
 }
 
@@ -31,16 +32,31 @@ fn is_noise(line: &str) -> bool {
     NOISE_PATTERNS.iter().any(|p| line.contains(p))
 }
 
-fn build_wine_command(config: &Config, uri: &str, use_gamemode: bool) -> Command {
+fn build_launch_command(config: &Config, uri: &str, use_gamemode: bool) -> Result<Command, String> {
+    let mut cmd = match crate::proton::build_command(config, uri) {
+        Some(cmd) => cmd,
+        None => build_wine_command(config, uri),
+    };
+
+    if use_gamemode {
+        let mut gm = Command::new("gamemoderun");
+        gm.arg(cmd.get_program());
+        gm.args(cmd.get_args());
+        for (key, value) in cmd.get_envs() {
+            if let Some(v) = value {
+                gm.env(key, v);
+            }
+        }
+        gm.current_dir(cmd.get_current_dir().unwrap_or(std::path::Path::new(".")));
+        cmd = gm;
+    }
+    Ok(cmd)
+}
+
+fn build_wine_command(config: &Config, uri: &str) -> Command {
     let perf = &config.launcher;
 
-    let mut cmd = if use_gamemode {
-        let mut c = Command::new("gamemoderun");
-        c.arg(&config.wine.binary);
-        c
-    } else {
-        Command::new(&config.wine.binary)
-    };
+    let mut cmd = Command::new(&config.wine.binary);
 
     cmd.env("WINEPREFIX", &config.paths.wine_prefix);
 
@@ -49,11 +65,28 @@ fn build_wine_command(config: &Config, uri: &str, use_gamemode: bool) -> Command
     if perf.use_esync { cmd.env("WINEESYNC", "1"); }
     if perf.use_fsync { cmd.env("WINEFSYNC", "1"); }
 
+    apply_common_env(&mut cmd, config);
+
+    cmd.arg(&config.paths.vortex_exe);
+    cmd.arg(uri);
+    cmd
+}
+
+pub(crate) fn apply_common_env(cmd: &mut Command, config: &Config) {
+    let perf = &config.launcher;
+
+    if perf.filter_wine_noise {
+        cmd.env("WINEDEBUG", "-all");
+    }
+
     if perf.shader_cache {
         let cache = dirs::cache_dir()
-            .unwrap_or_else(|| std::path::PathBuf::from(
-                std::env::var("HOME").unwrap_or_default() + "/.cache"
-            ))
+            .unwrap_or_else(|| {
+                std::env::var("HOME")
+                    .map(std::path::PathBuf::from)
+                    .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                    .join(".cache")
+            })
             .join("vortex-shaders");
         std::fs::create_dir_all(&cache).ok();
         cmd.env("VKD3D_SHADER_CACHE_PATH", cache);
@@ -66,10 +99,6 @@ fn build_wine_command(config: &Config, uri: &str, use_gamemode: bool) -> Command
     for (key, value) in crate::plugin::env_vars(config) {
         cmd.env(key, value);
     }
-
-    cmd.arg(&config.paths.vortex_exe);
-    cmd.arg(uri);
-    cmd
 }
 
 pub async fn play(game_id: u32) {
@@ -102,7 +131,7 @@ pub async fn play(game_id: u32) {
 }
 
 pub async fn play_with_token(game_id: u32, token: String) {
-    let uri = format!("vortex://play?game={}&token={}", game_id, token);
+    let uri = crate::uri::build_uri(game_id, &token);
     launch_with_uri(uri).await;
 }
 
@@ -119,23 +148,45 @@ async fn launch_with_uri(uri: String) {
         .map(|(id, _)| id.to_string())
         .unwrap_or_else(|| "?".to_string());
 
+    let backend = if cfg.proton.enabled {
+        match crate::proton::status(&cfg) {
+            crate::proton::BackendStatus::Ready { .. } => "GE-Proton (umu)",
+            other => {
+                eprintln!(
+                    "{} Proton requested but not ready: {}. Falling back to Wine.",
+                    "[WARN]".yellow(),
+                    other.describe()
+                );
+                "wine"
+            }
+        }
+    } else {
+        "wine"
+    };
+
     let use_gamemode = cfg.launcher.use_gamemode && which::which("gamemoderun").is_ok();
-    println!("{} Launching Vortex for game {} [{}]...",
-        "[INFO]".cyan(), game_id, perf_summary(&cfg, use_gamemode).bold());
-    tracing::debug!("Launch URI: {}", uri);
+    println!("{} Launching Vortex for game {} [{}] (backend: {})...",
+        "[INFO]".cyan(), game_id, perf_summary(&cfg, use_gamemode).bold(), backend);
+    tracing::debug!("Launch URI (token redacted): {}", crate::uri::redact(&uri));
 
     let mut pm = process::ProcessManager::new();
     pm.ensure_receiver(&cfg);
 
-    let mut cmd = build_wine_command(&cfg, &uri, use_gamemode);
+    let mut cmd = match build_launch_command(&cfg, &uri, use_gamemode) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("{} Failed to build launch command: {}", "[ERROR]".red(), e);
+            return;
+        }
+    };
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
 
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("{} Failed to launch Wine: {}", "[ERROR]".red(), e);
-            eprintln!("  Is Wine installed? Try {} for diagnostics.", "tempest doctor".cyan());
+            eprintln!("{} Failed to launch: {}", "[ERROR]".red(), e);
+            eprintln!("  Is Wine/Proton installed? Try {} for diagnostics.", "tempest doctor".cyan());
             return;
         }
     };
@@ -185,7 +236,15 @@ async fn launch_with_uri(uri: String) {
         None
     };
 
-    let status = child.wait().unwrap_or_else(|_| std::process::exit(1));
+    let status = match child.wait() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("{} Failed waiting for child: {}", "[ERROR]".red(), e);
+            stderr_handle.join().ok();
+            stdout_handle.join().ok();
+            return;
+        }
+    };
     stderr_handle.join().ok();
     stdout_handle.join().ok();
     if let Some(h) = optim_handle { h.join().ok(); }
@@ -195,12 +254,12 @@ async fn launch_with_uri(uri: String) {
     match status.code() {
         Some(0) => println!("{} Game exited cleanly.", "[DONE]".green()),
         Some(code) => {
-            eprintln!("{} Wine exited with code {}.", "[WARN]".yellow(), code);
+            eprintln!("{} Game exited with code {}.", "[WARN]".yellow(), code);
             eprintln!("  Run {} for diagnostics.", "tempest doctor".cyan());
         }
         None => {
-            eprintln!("{} Wine process was terminated by a signal.", "[WARN]".yellow());
-            eprintln!("  This may indicate a crash. Check Wine compatibility.");
+            eprintln!("{} Process was terminated by a signal.", "[WARN]".yellow());
+            eprintln!("  This may indicate a crash. Check Wine/Proton compatibility.");
         }
     }
 }

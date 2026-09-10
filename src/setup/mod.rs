@@ -171,7 +171,7 @@ pub(crate) fn is_root() -> bool {
     unsafe { libc::getuid() == 0 }
 }
 
-fn run_cmd(cmd: &str) -> bool {
+pub(crate) fn run_cmd(cmd: &str) -> bool {
     let effective = if is_root() {
         cmd.replace("sudo ", "")
     } else {
@@ -186,7 +186,7 @@ fn run_cmd(cmd: &str) -> bool {
         .unwrap_or_else(|e| { eprintln!("{} {}", "[ERROR]".red(), e); false })
 }
 
-fn prompt_confirm(msg: &str) -> bool {
+pub(crate) fn prompt_confirm(msg: &str) -> bool {
     print!("{} [y/N] ", msg.yellow());
     std::io::stdout().flush().ok();
     let mut buf = String::new();
@@ -227,7 +227,7 @@ pub async fn run() {
         }
     }
 
-    let cfg = Config::default();
+    let cfg = Config::load();
     let prefix = &cfg.paths.wine_prefix;
 
     println!();
@@ -259,16 +259,37 @@ pub async fn run() {
         println!("{} GameMode already installed.", "[PASS]".green());
     }
 
-    println!();
-    println!("{} Installing DXVK...", "[INFO]".cyan());
-    if let Err(e) = dxvk::install(prefix).await {
-        println!("{} DXVK installation failed (non-fatal): {}", "[WARN]".yellow(), e);
-    }
+    if cfg.proton.enabled {
+        println!();
+        match crate::proton::status(&cfg) {
+            crate::proton::BackendStatus::Ready { version } => {
+                println!(
+                    "{} GE-Proton installed ({}). Skipping separate DXVK/vkd3d install steps (bundled).",
+                    "[PASS]".green(),
+                    version.bold()
+                );
+            }
+            _ => {
+                println!("{} Proton enabled in config but no GE-Proton install was found.", "[INFO]".cyan());
+                if prompt_confirm("Download and install the latest GE-Proton now? (~500 MB)") {
+                    crate::proton::install().await;
+                } else {
+                    println!("{} Skipping. Run {} later.", "[WARN]".yellow(), "tempest proton".cyan());
+                }
+            }
+        }
+    } else {
+        println!();
+        println!("{} Installing DXVK...", "[INFO]".cyan());
+        if let Err(e) = dxvk::install(prefix).await {
+            println!("{} DXVK installation failed (non-fatal): {}", "[WARN]".yellow(), e);
+        }
 
-    println!();
-    println!("{} Installing vkd3d-proton...", "[INFO]".cyan());
-    if let Err(e) = vkd3d::install(prefix).await {
-        println!("{} vkd3d-proton installation failed (non-fatal): {}", "[WARN]".yellow(), e);
+        println!();
+        println!("{} Installing vkd3d-proton...", "[INFO]".cyan());
+        if let Err(e) = vkd3d::install(prefix).await {
+            println!("{} vkd3d-proton installation failed (non-fatal): {}", "[WARN]".yellow(), e);
+        }
     }
 
     println!();

@@ -21,7 +21,23 @@ curl -fsSL https://raw.githubusercontent.com/solomon-gleeson/tempest/master/inst
 tempest setup
 ```
 
-`setup` installs Wine, creates a dedicated Wine prefix, installs DXVK and vkd3d-proton, downloads Vortex, and registers the `vortex://` URI scheme.
+`setup` installs Wine, creates a dedicated Wine prefix, downloads Vortex, and registers the `vortex://` URI scheme. When the GE-Proton backend is enabled it skips the separate DXVK/vkd3d-proton install steps (both are bundled in GE-Proton).
+
+---
+
+## GE-Proton backend
+
+Tempest can launch Vortex through GE-Proton (bundled Wine + DXVK + vkd3d-proton)
+using [umu-launcher](https://github.com/Open-Wine-Components/umu-launcher)
+instead of a bare system Wine. Install umu-launcher, then:
+
+```bash
+tempest proton        # download & install the latest GE-Proton
+tempest proton status # report backend readiness
+```
+
+If `umu-run` or GE-Proton is missing, Tempest prints a warning and falls back
+to plain Wine at launch time.
 
 ---
 
@@ -29,14 +45,16 @@ tempest setup
 
 ```
 tempest setup              First-run: install Wine, create prefix, download client
-tempest login              Authenticate with Vortex (opens browser)
+tempest login              Authenticate with Vortex (terminal, supports 2FA)
 tempest list               List all available games
 tempest play <id>          Launch a game by ID
 tempest update             Update Vortex.exe to latest version
 tempest doctor             Diagnose issues across the full stack
+tempest proton             Install/upgrade the GE-Proton backend
+tempest proton status      Show GE-Proton / umu status
 tempest plugin             List installed plugins
 tempest plugin <name>      Install a plugin (e.g. fps-unlocker)
-tempest plugin uninstall   Remove a plugin
+tempest plugin uninstall <name>   Remove a plugin
 tempest uninstall          Remove everything Tempest installed
 ```
 
@@ -62,8 +80,16 @@ DXVK_HUD = "fps"
 filter_wine_noise = true   # suppress Wine fixme: and libEGL noise
 use_esync = true            # reduce synchronisation overhead (all kernels)
 use_fsync = true            # lower overhead (Linux 5.16+ / wine-staging)
-use_gamemode = false        # set true after: sudo dnf install gamemode
+use_gamemode = false        # set true after installing gamemode
 shader_cache = true         # cache vkd3d-proton shaders across launches
+fsr = 0                     # 0..5 fullscreen-FSR sharpness when running under GE-Proton (0 = off)
+
+[proton]
+enabled = true              # launch via umu-run + GE-Proton (fallback: Wine)
+umu = "umu-run"             # umu-run binary or absolute path
+proton_path = "GE-Proton"   # managed install, or path to a GE-Proton dir
+game_id = "umu-vortex"      # GAMEID handed to umu-launcher
+store = "none"              # store the umu-launcher is launched for
 ```
 
 ---
@@ -74,7 +100,7 @@ shader_cache = true         # cache vkd3d-proton shaders across launches
 tempest doctor
 ```
 
-Checks Wine, Vulkan, GPU, DXVK, vkd3d-proton, GameMode, the URI handler, network connectivity, and receiver.exe, with per-distro fix hints for every failure.
+Checks Wine, Vulkan, GPU, DXVK, vkd3d-proton, GameMode, the URI handler, network connectivity, and the GE-Proton/umu backend (when enabled), with per-distro fix hints for every failure.
 
 ```bash
 TEMPEST_LOG=debug tempest play 4

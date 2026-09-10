@@ -206,26 +206,51 @@ pub fn run() {
         }
     }
 
-    let dxgi = cfg.paths.wine_prefix.join("drive_c/windows/system32/dxgi.dll");
-    if crate::setup::dll::verify_dll(&dxgi) {
-        checks.push(Check::pass("DXVK installed", "dxgi.dll is a valid PE"));
+    if cfg.proton.enabled {
+        match crate::proton::status(&cfg) {
+            crate::proton::BackendStatus::Ready { version } => checks.push(Check::pass(
+                "Proton backend",
+                format!("GE-Proton {} via umu-run", version),
+            )),
+            crate::proton::BackendStatus::MissingUmu => checks.push(Check::fail(
+                "Proton backend",
+                "umu-run not found",
+                "Install umu-launcher (see: tempest proton status)",
+            )),
+            crate::proton::BackendStatus::MissingProton { .. } => checks.push(Check::fail(
+                "Proton backend",
+                "GE-Proton not installed",
+                "Run: tempest proton",
+            )),
+            crate::proton::BackendStatus::NotConfigured => checks.push(Check::fail(
+                "Proton backend",
+                "disabled in config",
+                "Set [proton] enabled = true, then run: tempest proton",
+            )),
+        }
+        checks.push(Check::pass("DXVK / vkd3d-proton", "bundled in GE-Proton, no separate install needed"));
     } else {
-        checks.push(Check::fail(
-            "DXVK installed",
-            "dxgi.dll not found or invalid",
-            "Run: tempest setup",
-        ));
-    }
+        let dxgi = cfg.paths.wine_prefix.join("drive_c/windows/system32/dxgi.dll");
+        if crate::setup::dll::verify_dll(&dxgi) {
+            checks.push(Check::pass("DXVK installed", "dxgi.dll is a valid PE"));
+        } else {
+            checks.push(Check::fail(
+                "DXVK installed",
+                "dxgi.dll not found or invalid",
+                "Run: tempest setup",
+            ));
+        }
 
-    let d3d12 = cfg.paths.wine_prefix.join("drive_c/windows/system32/d3d12.dll");
-    if crate::setup::dll::verify_dll(&d3d12) {
-        checks.push(Check::pass("vkd3d-proton installed", "d3d12.dll is a valid PE"));
-    } else {
-        checks.push(Check::fail(
-            "vkd3d-proton installed",
-            "d3d12.dll not found or invalid",
-            "Run: tempest setup",
-        ));
+        let d3d12 = cfg.paths.wine_prefix.join("drive_c/windows/system32/d3d12.dll");
+        if crate::setup::dll::verify_dll(&d3d12) {
+            checks.push(Check::pass("vkd3d-proton installed", "d3d12.dll is a valid PE"));
+        } else {
+            checks.push(Check::fail(
+                "vkd3d-proton installed",
+                "d3d12.dll not found or invalid",
+                "Run: tempest setup",
+            ));
+        }
     }
 
     for check in &checks {

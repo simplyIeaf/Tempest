@@ -9,6 +9,28 @@ pub struct Config {
     pub paths: PathConfig,
     pub wine: WineConfig,
     pub launcher: LauncherConfig,
+    pub proton: ProtonConfig,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ProtonConfig {
+    pub enabled: bool,
+    pub umu: String,
+    pub proton_path: String,
+    pub game_id: String,
+    pub store: String,
+}
+
+impl Default for ProtonConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            umu: "umu-run".to_string(),
+            proton_path: "GE-Proton".to_string(),
+            game_id: "umu-vortex".to_string(),
+            store: "none".to_string(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -38,6 +60,7 @@ pub struct LauncherConfig {
     pub use_fsync: bool,
     pub use_gamemode: bool,
     pub shader_cache: bool,
+    pub fsr: u8,
 }
 
 impl Default for PathConfig {
@@ -69,21 +92,24 @@ impl Default for LauncherConfig {
             use_fsync: true,
             use_gamemode: false,
             shader_cache: true,
+            fsr: 0,
         }
     }
 }
 
 impl Config {
     pub fn config_dir() -> PathBuf {
-        dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("~/.config"))
-            .join("tempest")
+        match dirs::config_dir() {
+            Some(dir) => dir.join("tempest"),
+            None => home_dir().join(".config").join("tempest"),
+        }
     }
 
     pub fn data_dir() -> PathBuf {
-        dirs::data_local_dir()
-            .unwrap_or_else(|| PathBuf::from("~/.local/share"))
-            .join("tempest")
+        match dirs::data_local_dir() {
+            Some(dir) => dir.join("tempest"),
+            None => home_dir().join(".local").join("share").join("tempest"),
+        }
     }
 
     pub fn load() -> Self {
@@ -163,9 +189,23 @@ impl Config {
                 use_fsync: self.launcher.use_fsync,
                 use_gamemode: self.launcher.use_gamemode,
                 shader_cache: self.launcher.shader_cache,
+                fsr: self.launcher.fsr,
+            },
+            proton: ProtonConfig {
+                enabled: self.proton.enabled,
+                umu: self.proton.umu.clone(),
+                proton_path: self.proton.proton_path.clone(),
+                game_id: self.proton.game_id.clone(),
+                store: self.proton.store.clone(),
             },
         }
     }
+}
+
+fn home_dir() -> PathBuf {
+    std::env::var("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("."))
 }
 
 #[cfg(test)]

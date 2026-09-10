@@ -9,6 +9,7 @@ mod crypto;
 mod games;
 mod logger;
 mod plugin;
+mod proton;
 
 use clap::{Parser, Subcommand};
 use thiserror::Error;
@@ -51,6 +52,8 @@ enum Commands {
     Uninstall,
     Support,
     Plugin { args: Vec<String> },
+    #[command(about = "Manage the GE-Proton backend (install or `status`)")]
+    Proton { action: Option<String> },
 }
 
 #[tokio::main]
@@ -79,6 +82,11 @@ async fn main() {
         Commands::Doctor => doctor::run(),
         Commands::Uninstall => setup::uninstall(),
         Commands::Plugin { args } => plugin::run(&args),
+        Commands::Proton { action } => match action.as_deref() {
+            Some("status") => proton::run_status(),
+            Some(other) => eprintln!("Unknown proton action: {other}"),
+            None => proton::install().await,
+        },
         Commands::Support => {
             println!("Join the Tempest support server:");
             println!("  https://discord.gg/yqWCHSz63p");
