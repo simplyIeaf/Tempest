@@ -1,8 +1,9 @@
 use aes_gcm::{
-    aead::{Aead, KeyInit, OsRng},
+    aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
 use base64::Engine;
+use rand::rngs::OsRng;
 use rand::RngCore;
 use std::path::PathBuf;
 
@@ -23,6 +24,12 @@ fn load_or_create_key() -> [u8; KEY_LEN] {
             key.copy_from_slice(&raw);
             return key;
         }
+        eprintln!(
+            "[WARN] {} is corrupt ({} bytes, expected {}). Regenerating; stored sessions are invalidated.",
+            path.display(),
+            raw.len(),
+            KEY_LEN
+        );
     }
 
     let mut key = [0u8; KEY_LEN];
