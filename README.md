@@ -50,6 +50,7 @@ tempest update             Update Vortex.exe to latest version
 tempest doctor             Diagnose issues across the full stack
 tempest proton             Install/upgrade the GE-Proton backend
 tempest proton status      Show GE-Proton / umu status
+tempest desktop [id]       Create a "Vortex" application-menu entry (with icon)
 tempest plugin             List installed plugins
 tempest plugin <name>      Install a plugin (e.g. fps-unlocker)
 tempest plugin uninstall <name>   Remove a plugin
@@ -79,8 +80,12 @@ filter_wine_noise = true   # suppress Wine fixme: and libEGL noise
 use_esync = true            # reduce synchronisation overhead (all kernels)
 use_fsync = true            # lower overhead (Linux 5.16+ / wine-staging)
 use_gamemode = false        # set true after installing gamemode
-shader_cache = true         # cache vkd3d-proton shaders across launches
+shader_cache = true         # cache DXVK / vkd3d-proton / GL shaders across launches
 fsr = 0                     # 0..5 fullscreen-FSR sharpness when running under GE-Proton (0 = off)
+gpu_device = "auto"         # "auto" | "nvidia" | "intel" - pick the Vulkan/GL adapter
+dxvk_hud = ""               # optional DXVK overlay, e.g. "fps,memory,version" ("" = off)
+wayland_mode = "auto"       # "auto" | "on" | "off" - select the wine driver for the session
+keep_panel = true           # keep the desktop panel/topbar visible instead of wine's fullscreen
 
 [proton]
 enabled = true              # launch via umu-run + GE-Proton (fallback: Wine)
@@ -88,6 +93,25 @@ umu = "umu-run"             # umu-run binary or absolute path
 proton_path = "GE-Proton"   # managed install, or path to a GE-Proton dir
 game_id = "umu-vortex"      # GAMEID handed to umu-launcher
 store = "none"              # store the umu-launcher is launched for
+```
+
+`gpu_device = "auto"` prefers the discrete NVIDIA GPU when one is present
+(device filtering for DXVK plus NVIDIA PRIME / GL offloading env). Set it to
+`"nvidia"` to force it, or `"intel"` to pin the integrated GPU.
+
+`wayland_mode` has Tempest detect the current session: under Wayland it enables
+the wine-wayland driver (`PROTON_ENABLE_WAYLAND`), otherwise it stays on
+X11/XWayland. `keep_panel = true` disables Wine's fullscreen hack so the
+desktop environment's own panel/topbar stays visible in fullscreen games.
+
+Shader-cache collection (`shader_cache = true`) persists DXVK state caches and
+NVIDIA/Mesa GL shader caches under `~/.cache/vortex-shaders/`, which removes
+most of the first-launch and fullscreen shader-compilation hitches.
+
+Create a launcher entry in your application menu (name "Vortex", with its icon):
+
+```bash
+tempest desktop 2     # optional game id; defaults to game 1
 ```
 
 ---
