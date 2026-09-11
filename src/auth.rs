@@ -71,7 +71,8 @@ fn login_client() -> Result<reqwest::Client, TempestError> {
 
 fn session_token_from(resp: &reqwest::Response) -> Option<String> {
     resp.cookies()
-        .find(|c| c.name() == "session_token")
+        .filter(|c| c.name() == "session_token")
+        .last()
         .map(|c| c.value().to_string())
 }
 
@@ -131,7 +132,8 @@ async fn login_2fa(pending_token: &str, code: &str) -> Result<String, TempestErr
     let status = resp.status();
     let resp_cookie = resp
         .cookies()
-        .find(|c| c.name() == "session_token")
+        .filter(|c| c.name() == "session_token")
+        .last()
         .map(|c| c.value().to_string());
     let body = resp.text().await.unwrap_or_default();
     if (status.is_success() || status.is_redirection()) && let Some(token) = resp_cookie {
