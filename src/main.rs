@@ -10,6 +10,7 @@ mod games;
 mod logger;
 mod plugin;
 mod proton;
+mod desktop;
 
 use clap::{Parser, Subcommand};
 use thiserror::Error;
@@ -54,6 +55,8 @@ enum Commands {
     Plugin { args: Vec<String> },
     #[command(about = "Manage the GE-Proton backend (install or `status`)")]
     Proton { action: Option<String> },
+    #[command(about = "Create a Vortex desktop entry with its icon")]
+    Desktop { game_id: Option<u32> },
 }
 
 #[tokio::main]
@@ -87,6 +90,10 @@ async fn main() {
             Some(other) => eprintln!("Unknown proton action: {other}"),
             None => proton::install().await,
         },
+        Commands::Desktop { game_id } => {
+            let id = game_id.unwrap_or(1);
+            desktop::create(id).await;
+        }
         Commands::Support => {
             println!("Join the Tempest support server:");
             println!("  https://discord.gg/yqWCHSz63p");
