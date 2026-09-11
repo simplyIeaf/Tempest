@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use crate::TempestError;
 
 #[derive(Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct Config {
     pub auth: AuthConfig,
     pub paths: PathConfig,
@@ -13,6 +14,7 @@ pub struct Config {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(default)]
 pub struct ProtonConfig {
     pub enabled: bool,
     pub umu: String,
@@ -34,12 +36,14 @@ impl Default for ProtonConfig {
 }
 
 #[derive(Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct AuthConfig {
     pub session_token: Option<String>,
     pub username: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(default)]
 pub struct PathConfig {
     pub wine_prefix: PathBuf,
     pub vortex_exe: PathBuf,
@@ -47,12 +51,14 @@ pub struct PathConfig {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(default)]
 pub struct WineConfig {
     pub binary: String,
     pub env: HashMap<String, String>,
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(default)]
 pub struct LauncherConfig {
     pub filter_wine_noise: bool,
     pub auto_update: bool,
@@ -61,6 +67,10 @@ pub struct LauncherConfig {
     pub use_gamemode: bool,
     pub shader_cache: bool,
     pub fsr: u8,
+    pub gpu_device: String,
+    pub dxvk_hud: String,
+    pub wayland_mode: String,
+    pub keep_panel: bool,
 }
 
 impl Default for PathConfig {
@@ -93,6 +103,10 @@ impl Default for LauncherConfig {
             use_gamemode: false,
             shader_cache: true,
             fsr: 0,
+            gpu_device: "auto".into(),
+            dxvk_hud: String::new(),
+            wayland_mode: "auto".into(),
+            keep_panel: true,
         }
     }
 }
@@ -190,6 +204,10 @@ impl Config {
                 use_gamemode: self.launcher.use_gamemode,
                 shader_cache: self.launcher.shader_cache,
                 fsr: self.launcher.fsr,
+                gpu_device: self.launcher.gpu_device.clone(),
+                dxvk_hud: self.launcher.dxvk_hud.clone(),
+                wayland_mode: self.launcher.wayland_mode.clone(),
+                keep_panel: self.launcher.keep_panel,
             },
             proton: ProtonConfig {
                 enabled: self.proton.enabled,

@@ -12,6 +12,10 @@ fn perf_summary(config: &Config, use_gamemode: bool) -> String {
     if config.launcher.fsr > 0 { active.push(format!("fsr{}", config.launcher.fsr)); }
     if use_gamemode { active.push("gamemode".into()); }
     if config.launcher.shader_cache { active.push("shader-cache".into()); }
+    if config.launcher.gpu_device != "auto" { active.push(format!("gpu={}", config.launcher.gpu_device)); }
+    if !config.launcher.dxvk_hud.is_empty() { active.push("dxvk-hud".into()); }
+    if config.launcher.keep_panel { active.push("panel".into()); }
+    if is_wayland(config) { active.push("wayland".into()); }
     if active.is_empty() { "none".to_string() } else { active.join(" ") }
 }
 
@@ -89,8 +93,33 @@ pub(crate) fn apply_common_env(cmd: &mut Command, config: &Config) {
             })
             .join("vortex-shaders");
         std::fs::create_dir_all(&cache).ok();
-        cmd.env("VKD3D_SHADER_CACHE_PATH", cache);
+        cmd.env("VKD3D_SHADER_CACHE_PATH", &cache);
+
+        let dxvk_cache = cache.join("dxvk");
+        std::fs::create_dir_all(&dxvk_cache).ok();
+        cmd.env("DXVK_STATE_CACHE_PATH", &dxvk_cache);
+
+        let shader_cache = cache.join("gl");
+        std::fs::create_dir_all(&shader_cache).ok();
+        cmd.env("__GL_SHADER_DISK_CACHE", "1");
+        cmd.env("__GL_SHADER_DISK_CACHE_PATH", &shader_cache);
+        cmd.env("__GL_SHADER_DISK_CACHE_SKIP_CLEANUP", "1");
+
+        let mesa_cache = cache.join("mesa");
+        std::fs::create_dir_all(&mesa_cache).ok();
+        cmd.env("MESA_SHADER_CACHE_DIR", &mesa_cache);
     }
+
+    cmd.env("STAGING_SHARED_MEMORY", "1");
+    cmd.env("WINE_LARGE_ADDRESS_AWARE", "1");
+    cmd.env("__GLVND_DISALLOW_PATCHING", "1");
+
+    if !perf.dxvk_hud.is_empty() {
+        cmd.env("DXVK_HUD", &perf.dxvk_hud);
+    }
+
+    apply_gpu_env(cmd, config);
+    apply_session_env(cmd, config);
 
     for (key, value) in &config.wine.env {
         cmd.env(key, value);
@@ -98,6 +127,75 @@ pub(crate) fn apply_common_env(cmd: &mut Command, config: &Config) {
 
     for (key, value) in crate::plugin::env_vars(config) {
         cmd.env(key, value);
+    }
+}
+
+fn detect_session() -> String {
+    std::env::var("XDG_SESSION_TYPE")
+        .unwrap_or_default()
+        .to_lowercase()
+}
+
+fn is_wayland(config: &Config) -> bool {
+    match config.launcher.wayland_mode.as_str() {
+        "on" => true,
+        "off" => false,
+        _ => detect_session() == "wayland" || std::env::var_os("WAYLAND_DISPLAY").is_some(),
+    }
+}
+
+fn detect_nvidia_icd() -> Option<String> {
+    let icd_dir = std::path::Path::new("/usr/share/vulkan/icd.d");
+    for name in &["nvidia_icd.json", "nvidia_icd.x86_64.json", "nvidia_icd.i686.json"] {
+        let path = icd_dir.join(name);
+        if path.exists() {
+            return Some(path.to_string_lossy().into_owned());
+        }
+    }
+    None
+}
+
+fn apply_gpu_env(cmd: &mut Command, config: &Config) {
+    let mode = config.launcher.gpu_device.as_str();
+    let nvidia_icd = detect_nvidia_icd();
+    let has_nvidia = nvidia_icd.is_some();
+
+    match mode {
+        "nvidia" => {
+            cmd.env("DXVK_FILTER_DEVICE_NAME", "NVIDIA");
+            cmd.env("__NV_PRIME_RENDER_OFFLOAD", "1");
+            cmd.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia");
+            cmd.env("__GL_THREADED_OPTIMIZATIONS", "1");
+            if let Some(ref icd) = nvidia_icd {
+                cmd.env("VK_ICD_FILENAMES", icd);
+            }
+        }
+        "intel" => {
+            cmd.env("DXVK_FILTER_DEVICE_NAME", "Intel");
+        }
+        _ => {
+            if has_nvidia {
+                cmd.env("DXVK_FILTER_DEVICE_NAME", "NVIDIA");
+                cmd.env("__NV_PRIME_RENDER_OFFLOAD", "1");
+                cmd.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia");
+                cmd.env("__GL_THREADED_OPTIMIZATIONS", "1");
+            }
+        }
+    }
+}
+
+fn apply_session_env(cmd: &mut Command, config: &Config) {
+    let wayland = is_wayland(config) && std::env::var_os("WAYLAND_DISPLAY").is_some();
+
+    if wayland {
+        cmd.env("PROTON_ENABLE_WAYLAND", "1");
+        cmd.env("WAYLAND_DISPLAY", std::env::var("WAYLAND_DISPLAY").unwrap_or_default());
+    } else {
+        cmd.env("PROTON_ENABLE_WAYLAND", "0");
+    }
+
+    if config.launcher.keep_panel {
+        cmd.env("WINE_DISABLE_FULLSCREEN_HACK", "1");
     }
 }
 
