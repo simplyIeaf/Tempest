@@ -278,6 +278,7 @@ fn extract_gpu(vulkaninfo: &str) -> Option<String> {
     let mut in_gpu_block = false;
     let mut current_type = String::new();
     let mut current_name = String::new();
+    let mut discrete = None;
 
     for line in vulkaninfo.lines() {
         let trimmed = line.trim();
@@ -287,7 +288,12 @@ fn extract_gpu(vulkaninfo: &str) -> Option<String> {
                 && !current_name.to_lowercase().contains("llvmpipe")
                 && !current_name.to_lowercase().contains("softpipe")
             {
-                return Some(current_name);
+                if current_type.contains("DISCRETE") {
+                    return Some(current_name.clone());
+                }
+                if discrete.is_none() {
+                    discrete = Some(current_name.clone());
+                }
             }
             in_gpu_block = true;
             current_type.clear();
@@ -305,12 +311,8 @@ fn extract_gpu(vulkaninfo: &str) -> Option<String> {
         }
     }
 
-    if in_gpu_block && !current_name.is_empty()
-        && !current_type.contains("CPU")
-        && !current_name.to_lowercase().contains("llvmpipe")
-        && !current_name.to_lowercase().contains("softpipe")
-    {
-        return Some(current_name);
+    if let Some(gpu) = discrete {
+        return Some(gpu);
     }
 
     for line in vulkaninfo.lines() {
@@ -318,7 +320,11 @@ fn extract_gpu(vulkaninfo: &str) -> Option<String> {
         if let Some(eq) = trimmed.find('=')
             && trimmed[..eq].trim() == "deviceName"
         {
-            return Some(trimmed[eq + 1..].trim().to_string());
+            let name = trimmed[eq + 1..].trim();
+            let lower = name.to_lowercase();
+            if !lower.contains("llvmpipe") && !lower.contains("softpipe") {
+                return Some(name.to_string());
+            }
         }
     }
     None
