@@ -55,7 +55,6 @@ Exec={exec}
 Icon={icon}
 Terminal=false
 Categories=Game;
-MimeType=x-scheme-handler/vortex;
 StartupNotify=false
 "#,
         exec = exec,
